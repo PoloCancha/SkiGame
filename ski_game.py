@@ -38,6 +38,16 @@ ORANGE = "#FF8C00"
 SKIN = "#FFD2AA"
 BLUE = "#1414B4"
 DARK_BLUE = "#282890"
+MOUNTAIN_FAR = "#5878A8"    # Far mountains: deep blue-grey
+MOUNTAIN_MID = "#8AAAC8"    # Mid mountains: medium blue-grey
+MOUNTAIN_NEAR = "#C8DCEE"   # Near mountains: light blue-grey
+SNOW_GROUND = "#EEF6FF"     # Snow strip at the bottom of the screen
+HUD_BG = "#00286E"          # HUD rounded-rectangle background
+
+# Jump parameters
+JUMP_DURATION = 45   # frames
+JUMP_HEIGHT = 50     # pixels upward at peak
+JUMP_SCALE_MIN = 0.7 # minimum scale at peak
 
 # Game states
 STATE_MENU = "menu"
@@ -135,15 +145,15 @@ def draw_mogul(canvas, x, y, w, h, tag=""):
     canvas.create_oval(x - w // 2, y - h, x + w // 2, y + h,
                        fill=WHITE, outline=LIGHT_BLUE, width=2, tags=tag)
 
-def draw_skier(canvas, x, y, angle=0, tag=""):
+def draw_skier(canvas, x, y, angle=0, scale=1.0, tag=""):
     """Draw skier as a collection of shapes. angle is in degrees (wipeout spin)."""
     rad = math.radians(angle)
     cos_a = math.cos(rad)
     sin_a = math.sin(rad)
 
     def rot(px, py):
-        """Rotate point (px,py) around (x,y)."""
-        dx, dy = px - x, py - y
+        """Scale and rotate point (px,py) around (x,y)."""
+        dx, dy = (px - x) * scale, (py - y) * scale
         return (x + dx * cos_a - dy * sin_a,
                 y + dx * sin_a + dy * cos_a)
 
@@ -154,6 +164,9 @@ def draw_skier(canvas, x, y, angle=0, tag=""):
             rx, ry = rot(px, py)
             result += [rx, ry]
         return result
+
+    lw_pole = max(1, int(2 * scale))
+    lw_limb = max(1, int(5 * scale))
 
     # Skis
     canvas.create_polygon(
@@ -166,10 +179,10 @@ def draw_skier(canvas, x, y, angle=0, tag=""):
     # Poles
     lx1, ly1 = rot(x - 10, y + 6)
     lx2, ly2 = rot(x - 22, y + 22)
-    canvas.create_line(lx1, ly1, lx2, ly2, fill=GREY, width=2, tags=tag)
+    canvas.create_line(lx1, ly1, lx2, ly2, fill=GREY, width=lw_pole, tags=tag)
     rx1, ry1 = rot(x + 6, y + 6)
     rx2, ry2 = rot(x + 18, y + 22)
-    canvas.create_line(rx1, ry1, rx2, ry2, fill=GREY, width=2, tags=tag)
+    canvas.create_line(rx1, ry1, rx2, ry2, fill=GREY, width=lw_pole, tags=tag)
 
     # Body
     canvas.create_polygon(
@@ -179,24 +192,25 @@ def draw_skier(canvas, x, y, angle=0, tag=""):
     # Arms
     ax1, ay1 = rot(x - 8, y + 4)
     ax2, ay2 = rot(x - 18, y + 10)
-    canvas.create_line(ax1, ay1, ax2, ay2, fill=RED, width=5, tags=tag)
+    canvas.create_line(ax1, ay1, ax2, ay2, fill=RED, width=lw_limb, tags=tag)
     bx1, by1 = rot(x + 8, y + 4)
     bx2, by2 = rot(x + 18, y + 10)
-    canvas.create_line(bx1, by1, bx2, by2, fill=RED, width=5, tags=tag)
+    canvas.create_line(bx1, by1, bx2, by2, fill=RED, width=lw_limb, tags=tag)
 
     # Legs
     lleg1 = rot(x - 5, y + 14)
     lleg2 = rot(x - 8, y + 22)
     canvas.create_line(lleg1[0], lleg1[1], lleg2[0], lleg2[1],
-                       fill=DARK_BLUE, width=5, tags=tag)
+                       fill=DARK_BLUE, width=lw_limb, tags=tag)
     rleg1 = rot(x + 5, y + 14)
     rleg2 = rot(x + 8, y + 22)
     canvas.create_line(rleg1[0], rleg1[1], rleg2[0], rleg2[1],
-                       fill=DARK_BLUE, width=5, tags=tag)
+                       fill=DARK_BLUE, width=lw_limb, tags=tag)
 
     # Head
     hx, hy = rot(x, y - 6)
-    canvas.create_oval(hx - 8, hy - 8, hx + 8, hy + 8,
+    hr = max(4, int(8 * scale))
+    canvas.create_oval(hx - hr, hy - hr, hx + hr, hy + hr,
                        fill=SKIN, outline="", tags=tag)
 
     # Helmet
@@ -309,6 +323,10 @@ class Snowflake:
         self.size = random.randint(2, 5)
         self.speed = random.uniform(1.0, 3.5)
         self.drift = random.uniform(-0.4, 0.4)
+        # Vary colour slightly for visual interest (pure white → faint icy-blue)
+        bri = random.randint(210, 255)
+        blue_bump = random.randint(0, 45)
+        self.color = hex_color(bri, bri, min(255, bri + blue_bump))
 
     def update(self):
         self.y += self.speed
@@ -415,29 +433,38 @@ class SkiGame:
         elif self.state == STATE_GAMEOVER and event.keysym in ("r", "Return"):
             self._new_game()
             self.state = STATE_PLAYING
+        # Jump
+        elif (self.state == STATE_PLAYING and event.keysym == "space"
+              and not self.jump_active and self.skier_alive):
+            self.jump_active = True
+            self.jump_frame = 0
 
     def _key_release(self, event):
         self.keys.discard(event.keysym.lower())
 
     def _init_background(self):
         self.bg_layers = [
-            BackgroundLayer(MOUNTAIN_SHADOW, 4, (150, 320), 0.3),
-            BackgroundLayer(MOUNTAIN_COLOR, 5, (220, 420), 0.6),
-            BackgroundLayer(OFF_WHITE, 6, (300, 500), 1.0),
+            BackgroundLayer(MOUNTAIN_FAR,  4, (150, 320), 0.3),
+            BackgroundLayer(MOUNTAIN_MID,  5, (220, 420), 0.6),
+            BackgroundLayer(MOUNTAIN_NEAR, 6, (300, 500), 1.0),
         ]
         self.side_trees = (
-            [SideTree('left') for _ in range(8)] +
-            [SideTree('right') for _ in range(8)]
+            [SideTree('left') for _ in range(4)] +
+            [SideTree('right') for _ in range(4)]
         )
         self.snowflakes = [Snowflake(spawning=False) for _ in range(80)]
 
     def _new_game(self):
         # Skier state
         self.skier_x = SCREEN_WIDTH // 2
-        self.skier_y = 120
+        self.skier_y = SCREEN_HEIGHT // 3  # start at the top of the vertical play area
         self.skier_angle = 0
         self.skier_alive = True
         self.wipeout_timer = 0
+
+        # Jump state
+        self.jump_active = False
+        self.jump_frame = 0
 
         self.obstacles = []
         self.score = 0.0
@@ -476,12 +503,28 @@ class SkiGame:
         )
         self.score += self.speed * 0.05
 
-        # Skier movement
+        # Skier horizontal movement
         if 'left' in self.keys or 'a' in self.keys:
             self.skier_x -= 5
         if 'right' in self.keys or 'd' in self.keys:
             self.skier_x += 5
         self.skier_x = max(50, min(SCREEN_WIDTH - 50, self.skier_x))
+
+        # Skier vertical movement (up/down within top-1/3 to bottom-2/3 of screen)
+        if 'up' in self.keys or 'w' in self.keys:
+            self.skier_y -= 4
+        if 'down' in self.keys or 's' in self.keys:
+            self.skier_y += 4
+        min_y = SCREEN_HEIGHT // 3
+        max_y = (SCREEN_HEIGHT * 2) // 3
+        self.skier_y = max(min_y, min(max_y, self.skier_y))
+
+        # Jump arc update
+        if self.jump_active:
+            self.jump_frame += 1
+            if self.jump_frame >= JUMP_DURATION:
+                self.jump_active = False
+                self.jump_frame = 0
 
         # Background scroll
         for layer in self.bg_layers:
@@ -501,17 +544,18 @@ class SkiGame:
             obs.update()
         self.obstacles = [o for o in self.obstacles if not o.is_off_screen()]
 
-        # Collision
-        skier_rect = (self.skier_x - 14, self.skier_y - 20,
-                      self.skier_x + 14, self.skier_y + 20)
-        for obs in self.obstacles:
-            if rects_overlap(skier_rect, obs.get_rect()):
-                self.skier_alive = False
-                self.wipeout_timer = 90
-                self.state = STATE_WIPEOUT
-                if int(self.score) > self.high_score:
-                    self.high_score = int(self.score)
-                break
+        # Collision (disabled during jump)
+        if not self.jump_active:
+            skier_rect = (self.skier_x - 14, self.skier_y - 20,
+                          self.skier_x + 14, self.skier_y + 20)
+            for obs in self.obstacles:
+                if rects_overlap(skier_rect, obs.get_rect()):
+                    self.skier_alive = False
+                    self.wipeout_timer = 90
+                    self.state = STATE_WIPEOUT
+                    if int(self.score) > self.high_score:
+                        self.high_score = int(self.score)
+                    break
 
     def _update_wipeout(self):
         self.wipeout_timer -= 1
@@ -549,9 +593,9 @@ class SkiGame:
             self._draw_gameover_overlay()
 
     def _draw_sky_gradient(self):
-        # Draw sky as horizontal gradient lines
-        r1, g1, b1 = 0x87, 0xCE, 0xEB  # SKY_BLUE
-        r2, g2, b2 = 0xB4, 0xDC, 0xFF  # ICY_BLUE
+        # Draw sky as horizontal gradient lines — deep blue at top, icy light blue at bottom
+        r1, g1, b1 = 0x1E, 0x50, 0x96  # Deep navy-blue at the very top
+        r2, g2, b2 = 0xC8, 0xE8, 0xFF  # Icy light blue at the horizon
         for y in range(SCREEN_HEIGHT):
             t = y / SCREEN_HEIGHT
             r = int(r1 + (r2 - r1) * t)
@@ -584,12 +628,22 @@ class SkiGame:
         for tree in self.side_trees:
             draw_pine_tree(self.canvas, tree.x, int(tree.y), tree.size, tag="bg")
 
+        # Snow ground strip at the bottom
+        self.canvas.create_rectangle(
+            0, SCREEN_HEIGHT - 28, SCREEN_WIDTH, SCREEN_HEIGHT,
+            fill=SNOW_GROUND, outline="", tags="bg"
+        )
+        self.canvas.create_rectangle(
+            0, SCREEN_HEIGHT - 28, SCREEN_WIDTH, SCREEN_HEIGHT - 20,
+            fill=WHITE, outline="", tags="bg"
+        )
+
     def _draw_snowflakes(self):
         for flake in self.snowflakes:
             r = flake.size
             self.canvas.create_oval(
                 flake.x - r, flake.y - r, flake.x + r, flake.y + r,
-                fill=WHITE, outline="", tags="flake"
+                fill=flake.color, outline="", tags="flake"
             )
 
     def _draw_obstacles(self):
@@ -598,41 +652,90 @@ class SkiGame:
 
     def _draw_skier(self):
         angle = self.skier_angle if not self.skier_alive else 0
-        draw_skier(self.canvas, self.skier_x, self.skier_y, angle=angle, tag="skier")
+
+        if self.jump_active:
+            t = self.jump_frame / JUMP_DURATION  # 0.0 → 1.0
+            arc = math.sin(math.pi * t)           # peaks at 0.5
+            jump_offset = int(arc * JUMP_HEIGHT)
+            scale = 1.0 - (1.0 - JUMP_SCALE_MIN) * arc
+
+            # Shadow on the ground (shrinks as skier rises)
+            sw = max(8, int(28 * (1.0 - arc * 0.6)))
+            sh = max(3, int(8 * (1.0 - arc * 0.6)))
+            sx, sy = self.skier_x, self.skier_y + 18
+            self.canvas.create_oval(
+                sx - sw, sy - sh, sx + sw, sy + sh,
+                fill=DARK_GREY, outline="", stipple="gray25", tags="skier"
+            )
+            draw_skier(self.canvas, self.skier_x,
+                       self.skier_y - jump_offset,
+                       angle=angle, scale=scale, tag="skier")
+        else:
+            draw_skier(self.canvas, self.skier_x, self.skier_y,
+                       angle=angle, tag="skier")
+
+    def _draw_rounded_rect(self, x1, y1, x2, y2, r, fill, tag=""):
+        """Draw a rounded rectangle on the canvas."""
+        self.canvas.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline="", tags=tag)
+        self.canvas.create_rectangle(x1, y1 + r, x2, y2 - r, fill=fill, outline="", tags=tag)
+        self.canvas.create_oval(x1, y1, x1 + 2*r, y1 + 2*r, fill=fill, outline="", tags=tag)
+        self.canvas.create_oval(x2 - 2*r, y1, x2, y1 + 2*r, fill=fill, outline="", tags=tag)
+        self.canvas.create_oval(x1, y2 - 2*r, x1 + 2*r, y2, fill=fill, outline="", tags=tag)
+        self.canvas.create_oval(x2 - 2*r, y2 - 2*r, x2, y2, fill=fill, outline="", tags=tag)
 
     def _draw_hud(self):
         score_text = f"Score: {int(self.score)}"
-        # Shadow
-        self.canvas.create_text(SCREEN_WIDTH - 14, 14,
-                                anchor="ne", text=score_text,
-                                font=("Arial", 22, "bold"), fill=BLACK, tags="hud")
-        self.canvas.create_text(SCREEN_WIDTH - 16, 12,
-                                anchor="ne", text=score_text,
-                                font=("Arial", 22, "bold"), fill=WHITE, tags="hud")
-        self.canvas.create_text(SCREEN_WIDTH - 16, 42,
-                                anchor="ne", text=f"Best: {self.high_score}",
-                                font=("Arial", 16), fill=YELLOW, tags="hud")
-        self.canvas.create_text(16, 12,
-                                anchor="nw", text=f"Speed: {self.speed:.1f}",
-                                font=("Arial", 16), fill=WHITE, tags="hud")
+        # Score box (top-right)
+        self._draw_rounded_rect(
+            SCREEN_WIDTH - 170, 6, SCREEN_WIDTH - 6, 36,
+            r=8, fill=HUD_BG, tag="hud"
+        )
+        self.canvas.create_text(SCREEN_WIDTH - 88, 21,
+                                anchor="center", text=score_text,
+                                font=("Arial", 16, "bold"), fill=WHITE, tags="hud")
+        # Best score (below)
+        self._draw_rounded_rect(
+            SCREEN_WIDTH - 150, 42, SCREEN_WIDTH - 6, 66,
+            r=8, fill=HUD_BG, tag="hud"
+        )
+        self.canvas.create_text(SCREEN_WIDTH - 78, 54,
+                                anchor="center", text=f"Best: {self.high_score}",
+                                font=("Arial", 14), fill=YELLOW, tags="hud")
+        # Speed (top-left)
+        self._draw_rounded_rect(6, 6, 150, 30, r=8, fill=HUD_BG, tag="hud")
+        self.canvas.create_text(78, 18,
+                                anchor="center", text=f"Speed: {self.speed:.1f}",
+                                font=("Arial", 14), fill=WHITE, tags="hud")
+        # Jump indicator
+        if self.jump_active:
+            self._draw_rounded_rect(6, 38, 100, 60, r=8, fill="#005000", tag="hud")
+            self.canvas.create_text(53, 49,
+                                    anchor="center", text="JUMP!",
+                                    font=("Arial", 13, "bold"), fill="#50FF50", tags="hud")
 
     def _draw_menu_overlay(self):
         # Semi-transparent panel (simulate with a filled rectangle + stipple)
         self.canvas.create_rectangle(
-            SCREEN_WIDTH // 2 - 280, SCREEN_HEIGHT // 2 - 180,
-            SCREEN_WIDTH // 2 + 280, SCREEN_HEIGHT // 2 + 140,
+            SCREEN_WIDTH // 2 - 280, SCREEN_HEIGHT // 2 - 200,
+            SCREEN_WIDTH // 2 + 280, SCREEN_HEIGHT // 2 + 160,
             fill="#001E50", stipple="gray50", outline="", tags="overlay"
         )
-        self.canvas.create_text(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 145,
+        self.canvas.create_text(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 165,
                                 text="SKI MOUNTAIN GAME",
                                 font=("Arial", 38, "bold"), fill=WHITE, tags="overlay")
-        self.canvas.create_text(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 90,
+        self.canvas.create_text(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 110,
                                 text="Dodge obstacles and survive!",
                                 font=("Arial", 18), fill=ICY_BLUE, tags="overlay")
-        self.canvas.create_text(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 55,
-                                text="Arrow Keys or A / D to move left & right",
-                                font=("Arial", 16), fill=WHITE, tags="overlay")
-        self.canvas.create_text(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 10,
+        self.canvas.create_text(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 75,
+                                text="← → / A D  — move left & right",
+                                font=("Arial", 15), fill=WHITE, tags="overlay")
+        self.canvas.create_text(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 48,
+                                text="↑ ↓ / W S  — move up & down",
+                                font=("Arial", 15), fill=WHITE, tags="overlay")
+        self.canvas.create_text(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 21,
+                                text="SPACE  — jump over obstacles",
+                                font=("Arial", 15), fill=WHITE, tags="overlay")
+        self.canvas.create_text(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30,
                                 text="Press ENTER to Start",
                                 font=("Arial", 24, "bold"), fill=YELLOW, tags="overlay")
 

@@ -1,10 +1,10 @@
-# 🎿 Ski Mountain Game
+# Ski Mountain Game
 
 A fully playable skiing game built with Python and `pygame`. Control a skier down a snowy mountain, dodge obstacles, and see how long you can survive!
 
 ---
 
-## 📸 Features
+## Features
 
 - Scrolling mountain background with layered silhouettes
 - Animated skier with wipeout effect on collision
@@ -17,7 +17,7 @@ A fully playable skiing game built with Python and `pygame`. Control a skier dow
 
 ---
 
-## 🛠 Installation
+## Installation
 
 Make sure you have **Python 3.7+** installed, then install the only dependency:
 
@@ -33,7 +33,7 @@ pip install -r requirements.txt
 
 ---
 
-## ▶️ How to Run
+## How to Run
 
 ```bash
 python ski_game.py
@@ -41,7 +41,7 @@ python ski_game.py
 
 ---
 
-## 🎮 Controls
+## Controls
 
 | Key | Action |
 |-----|--------|
@@ -52,7 +52,7 @@ python ski_game.py
 
 ---
 
-## 🪨 Obstacle Types
+## Obstacle Types
 
 | Obstacle | Description |
 |----------|-------------|
@@ -64,7 +64,7 @@ python ski_game.py
 
 ---
 
-## 🏆 Scoring
+## Scoring
 
 - Your **score increases continuously** the longer you survive
 - Obstacles speed up over time, making survival harder
@@ -72,7 +72,7 @@ python ski_game.py
 
 ---
 
-## 📁 File Structure
+## File Structure
 
 ```
 ski_game.py       # Main game (all logic, no external assets)

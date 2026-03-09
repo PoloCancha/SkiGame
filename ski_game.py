@@ -2,15 +2,6 @@
 """
 Ski Mountain Game
 A Python skiing game built with tkinter - works on Python 3.14+, no extra installs needed!
-
-Features:
-- Scrolling mountain background with parallax layers and snowflakes
-- Skier character with left/right/up/down movement and a spacebar jump
-- Five obstacle types: rock, tree, ramp, snowman, mogul
-- Increasing speed and difficulty over time
-- OBSTACLE_SIZES dictionary (required advanced data structure) maps each obstacle
-  type to its size parameters, used in Obstacle._set_size
-- try/except error handling in the game loop and at the entry point
 """
 
 import tkinter as tk
@@ -72,58 +63,15 @@ OBS_RAMP = "ramp"
 OBS_SNOWMAN = "snowman"
 OBS_MOGUL = "mogul"
 
-# ---------------------------------------------------------------------------
-# Advanced data structure (dictionary) – required by project rubric.
-# Maps each obstacle type to its size-generation parameters so that
-# Obstacle._set_size can look up values rather than use a long if/elif chain.
-#   "size"    -> (min, max) for the random base size
-#   "w_scale" -> multiplier applied to size to get width (None = width equals size)
-#   "h_scale" -> multiplier applied to size to get height (None = h = size + 20)
-#   "w"       -> (min, max) when width is chosen independently of height
-#   "h"       -> (min, max) when height is chosen independently of width
-# ---------------------------------------------------------------------------
-OBSTACLE_SIZES = {
-    OBS_ROCK:    {"size": (18, 32),  "w_scale": 2,    "h_scale": 1},
-    OBS_TREE:    {"size": (28, 50),  "w_scale": 1,    "h_scale": None},   # h = size + 20
-    OBS_RAMP:    {"w": (60, 90),     "h": (20, 35)},
-    OBS_SNOWMAN: {"size": (16, 26),  "w_scale": 2,    "h_scale": 4},
-    OBS_MOGUL:   {"w": (50, 80),     "h": (18, 30)},
-}
-
 
 # ---------------------------------------------------------------------------
 # Helper: polygon / shape drawing on tkinter Canvas
 # ---------------------------------------------------------------------------
 
 def hex_color(r, g, b):
-    """Convert integer RGB components to a tkinter-compatible hex color string.
-
-    Parameters:
-        r (int): Red component (0–255).
-        g (int): Green component (0–255).
-        b (int): Blue component (0–255).
-
-    Returns:
-        str: Hex color string in the form ``"#rrggbb"``.
-    """
     return f"#{r:02x}{g:02x}{b:02x}"
 
 def draw_pine_tree(canvas, x, y, size, tag=""):
-    """Draw a stylised pine tree on *canvas* centred at (*x*, *y*).
-
-    The tree consists of a brown rectangular trunk topped with three
-    overlapping green triangles that create a layered canopy effect.
-
-    Parameters:
-        canvas (tk.Canvas): The tkinter canvas to draw on.
-        x (int): Horizontal centre of the tree base.
-        y (int): Vertical position of the tree base (bottom of trunk).
-        size (int): Approximate overall height of the canopy in pixels.
-        tag (str): Optional tkinter item tag applied to every shape drawn.
-
-    Returns:
-        None
-    """
     trunk_w = max(4, size // 6)
     trunk_h = max(8, size // 3)
     # Trunk
@@ -143,23 +91,6 @@ def draw_pine_tree(canvas, x, y, size, tag=""):
         canvas.create_polygon(pts, fill=color, outline="", tags=tag)
 
 def draw_rock(canvas, x, y, size, offsets, tag=""):
-    """Draw an irregular boulder shape on *canvas* centred at (*x*, *y*).
-
-    Eight points are placed around an ellipse and perturbed by *offsets*
-    to give a natural, jagged rock appearance.
-
-    Parameters:
-        canvas (tk.Canvas): The tkinter canvas to draw on.
-        x (int): Horizontal centre of the rock.
-        y (int): Vertical centre of the rock.
-        size (int): Approximate radius of the rock in pixels.
-        offsets (list[float]): Eight angular perturbation values (radians)
-            that randomise each vertex position.
-        tag (str): Optional tkinter item tag applied to every shape drawn.
-
-    Returns:
-        None
-    """
     num_pts = 8
     pts = []
     for i in range(num_pts):
@@ -170,22 +101,6 @@ def draw_rock(canvas, x, y, size, offsets, tag=""):
     canvas.create_polygon(pts, fill=DARK_GREY, outline=GREY, width=2, tags=tag)
 
 def draw_ramp(canvas, x, y, w, h, tag=""):
-    """Draw a ski jump ramp (angled wedge) on *canvas*.
-
-    The ramp is a quadrilateral with a flat bottom and a slanted top
-    surface, coloured off-white with a grey outline.
-
-    Parameters:
-        canvas (tk.Canvas): The tkinter canvas to draw on.
-        x (int): Horizontal centre of the ramp base.
-        y (int): Vertical position of the ramp base (bottom edge).
-        w (int): Total width of the ramp in pixels.
-        h (int): Height of the ramp in pixels.
-        tag (str): Optional tkinter item tag applied to every shape drawn.
-
-    Returns:
-        None
-    """
     pts = [
         x - w // 2, y,
         x + w // 2, y,
@@ -195,19 +110,6 @@ def draw_ramp(canvas, x, y, w, h, tag=""):
     canvas.create_polygon(pts, fill=OFF_WHITE, outline=GREY, width=2, tags=tag)
 
 def draw_snowman(canvas, x, y, size, tag=""):
-    """Draw a two-ball snowman with hat, eyes, and carrot nose on *canvas*.
-
-    Parameters:
-        canvas (tk.Canvas): The tkinter canvas to draw on.
-        x (int): Horizontal centre of the snowman's base ball.
-        y (int): Vertical position of the bottom of the base ball.
-        size (int): Radius of the base ball in pixels; the head is
-            proportionally smaller (≈ 65 % of *size*).
-        tag (str): Optional tkinter item tag applied to every shape drawn.
-
-    Returns:
-        None
-    """
     r_bot = size
     r_top = int(size * 0.65)
     # Bottom ball
@@ -241,22 +143,6 @@ def draw_snowman(canvas, x, y, size, tag=""):
                              fill=BLACK, outline="", tags=tag)
 
 def draw_mogul(canvas, x, y, w, h, tag=""):
-    """Draw a snow mogul (rounded snow mound) on *canvas*.
-
-    The mogul is rendered as a white ellipse with a light-blue outline.
-
-    Parameters:
-        canvas (tk.Canvas): The tkinter canvas to draw on.
-        x (int): Horizontal centre of the mogul.
-        y (int): Vertical centre of the mogul.
-        w (int): Total width of the mogul in pixels.
-        h (int): Half-height of the mogul (the ellipse extends *h* pixels
-            above and below *y*).
-        tag (str): Optional tkinter item tag applied to every shape drawn.
-
-    Returns:
-        None
-    """
     canvas.create_oval(x - w // 2, y - h, x + w // 2, y + h,
                        fill=WHITE, outline=LIGHT_BLUE, width=2, tags=tag)
 
@@ -356,18 +242,6 @@ def draw_skier(canvas, x, y, angle=0, scale=1.0, tag=""):
 
 class Obstacle:
     def __init__(self, speed):
-        """Initialise a new obstacle with a randomly chosen type and position.
-
-        The obstacle is spawned just above the top of the screen at a random
-        horizontal position in the central play area, with randomised dimensions
-        appropriate to its type.
-
-        Parameters:
-            speed (float): Downward scroll speed in pixels per frame.
-
-        Returns:
-            None
-        """
         self.kind = random.choice([OBS_ROCK, OBS_TREE, OBS_RAMP, OBS_SNOWMAN, OBS_MOGUL])
         self.x = random.randint(180, SCREEN_WIDTH - 180)
         self.y = random.randint(-80, -20)
@@ -376,65 +250,31 @@ class Obstacle:
         self._rock_offsets = [random.uniform(-0.25, 0.25) for _ in range(8)]
 
     def _set_size(self):
-        """Set ``self.w``, ``self.h``, and ``self.size`` from the OBSTACLE_SIZES dictionary.
-
-        Looks up the size parameters for ``self.kind`` in the module-level
-        ``OBSTACLE_SIZES`` constant (the required dictionary data structure) and
-        uses them to generate randomised but type-appropriate dimensions.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
-        params = OBSTACLE_SIZES[self.kind]
-        if "size" in params:
-            self.size = random.randint(*params["size"])
-            w_scale = params["w_scale"]
-            h_scale = params["h_scale"]
-            self.w = self.size * w_scale
-            self.h = self.size + 20 if h_scale is None else self.size * h_scale
-        else:
-            self.w = random.randint(*params["w"])
-            self.h = random.randint(*params["h"])
+        if self.kind == OBS_ROCK:
+            self.size = random.randint(18, 32)
+            self.w, self.h = self.size * 2, self.size
+        elif self.kind == OBS_TREE:
+            self.size = random.randint(28, 50)
+            self.w, self.h = self.size, self.size + 20
+        elif self.kind == OBS_RAMP:
+            self.w = random.randint(60, 90)
+            self.h = random.randint(20, 35)
+            self.size = self.w
+        elif self.kind == OBS_SNOWMAN:
+            self.size = random.randint(16, 26)
+            self.w, self.h = self.size * 2, self.size * 4
+        elif self.kind == OBS_MOGUL:
+            self.w = random.randint(50, 80)
+            self.h = random.randint(18, 30)
             self.size = self.w
 
     def update(self):
-        """Move the obstacle downward by its speed for one frame.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         self.y += self.speed
 
     def is_off_screen(self):
-        """Return True if the obstacle has scrolled past the bottom of the screen.
-
-        Parameters:
-            None
-
-        Returns:
-            bool: True when ``self.y`` exceeds the screen height by a small margin.
-        """
         return self.y > SCREEN_HEIGHT + 120
 
     def get_rect(self):
-        """Return a tight axis-aligned bounding rectangle for collision detection.
-
-        The rectangle is inset slightly from the visual edges to give more
-        forgiving hitboxes.
-
-        Parameters:
-            None
-
-        Returns:
-            tuple[int, int, int, int]: ``(x1, y1, x2, y2)`` bounding box, or
-            ``None`` if the obstacle type is unrecognised.
-        """
         if self.kind == OBS_ROCK:
             return (self.x - self.size + 4, self.y - self.size // 2 + 4,
                     self.x + self.size - 4, self.y + self.size // 2 - 4)
@@ -453,18 +293,6 @@ class Obstacle:
                     self.x + self.w // 2 - 6, self.y + self.h // 2)
 
     def draw(self, canvas, tag=""):
-        """Draw the obstacle on *canvas* using the appropriate drawing function.
-
-        Delegates to one of ``draw_rock``, ``draw_pine_tree``, ``draw_ramp``,
-        ``draw_snowman``, or ``draw_mogul`` depending on ``self.kind``.
-
-        Parameters:
-            canvas (tk.Canvas): The tkinter canvas to draw on.
-            tag (str): Optional tkinter item tag applied to every shape drawn.
-
-        Returns:
-            None
-        """
         if self.kind == OBS_ROCK:
             draw_rock(canvas, self.x, self.y, self.size, self._rock_offsets, tag)
         elif self.kind == OBS_TREE:
@@ -488,32 +316,9 @@ def rects_overlap(r1, r2):
 
 class Snowflake:
     def __init__(self, spawning=True):
-        """Initialise a snowflake at a random position and call reset to set attributes.
-
-        Parameters:
-            spawning (bool): When True the flake starts above the screen edge;
-                when False it may start anywhere on screen (used to pre-populate
-                the initial snowfall).
-
-        Returns:
-            None
-        """
         self.reset(spawning)
 
     def reset(self, spawning=True):
-        """Randomise position, size, speed, drift, and colour for this snowflake.
-
-        Called on initialisation and whenever a flake scrolls off screen so
-        that it can re-enter from the top.
-
-        Parameters:
-            spawning (bool): When True the flake is placed just above the top
-                edge; when False it is placed at a random vertical position
-                anywhere on screen.
-
-        Returns:
-            None
-        """
         self.x = random.uniform(0, SCREEN_WIDTH)
         self.y = random.uniform(-20, -5) if spawning else random.uniform(0, SCREEN_HEIGHT)
         self.size = random.randint(2, 5)
@@ -525,17 +330,6 @@ class Snowflake:
         self.color = hex_color(bri, bri, min(255, bri + blue_bump))
 
     def update(self):
-        """Advance the snowflake one frame: fall downward and drift sideways.
-
-        If the flake moves off the bottom or either side of the screen it is
-        reset so it re-enters from the top.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         self.y += self.speed
         self.x += self.drift
         if self.y > SCREEN_HEIGHT + 10 or self.x < -10 or self.x > SCREEN_WIDTH + 10:
@@ -547,40 +341,12 @@ class Snowflake:
 
 class BackgroundLayer:
     def __init__(self, color, num_peaks, height_range, speed_factor):
-        """Initialise a scrolling mountain silhouette layer.
-
-        Parameters:
-            color (str): Fill colour for the mountain polygon (hex string).
-            num_peaks (int): Approximate number of mountain peaks across the
-                screen width.
-            height_range (tuple[int, int]): ``(min_y, max_y)`` range for random
-                peak heights (in pixels from the top of the screen).
-            speed_factor (float): Fraction of the base game speed at which this
-                layer scrolls; use smaller values for distant layers to create
-                a parallax effect.
-
-        Returns:
-            None
-        """
         self.color = color
         self.speed_factor = speed_factor
         self.scroll_y = 0
         self._build(num_peaks, height_range)
 
     def _build(self, num_peaks, height_range):
-        """Generate the mountain polygon point list for this layer.
-
-        Creates a closed polygon that spans twice the screen height so that
-        seamless vertical tiling is possible during scrolling.
-
-        Parameters:
-            num_peaks (int): Number of peaks across the screen width.
-            height_range (tuple[int, int]): ``(min_y, max_y)`` pixel range for
-                random peak heights from the top of the screen.
-
-        Returns:
-            None
-        """
         h_lo, h_hi = height_range
         step = SCREEN_WIDTH // num_peaks
         self.tile_height = SCREEN_HEIGHT * 2
@@ -593,30 +359,9 @@ class BackgroundLayer:
         self.points = pts
 
     def update(self, base_speed):
-        """Advance the scroll position by one frame.
-
-        Parameters:
-            base_speed (float): Current game speed in pixels per frame; the
-                layer moves at ``base_speed * self.speed_factor``.
-
-        Returns:
-            None
-        """
         self.scroll_y = (self.scroll_y + base_speed * self.speed_factor) % self.tile_height
 
     def draw(self, canvas, tag=""):
-        """Draw the mountain layer on *canvas*, tiling vertically to fill the screen.
-
-        Three copies of the polygon are drawn (above, at, and below the current
-        scroll offset) so there are no visible seams during scrolling.
-
-        Parameters:
-            canvas (tk.Canvas): The tkinter canvas to draw on.
-            tag (str): Optional tkinter item tag applied to every shape drawn.
-
-        Returns:
-            None
-        """
         offset = self.scroll_y
         for dy in [-self.tile_height, 0, self.tile_height]:
             flat = []
@@ -630,29 +375,10 @@ class BackgroundLayer:
 
 class SideTree:
     def __init__(self, side):
-        """Initialise a decorative tree on one side of the ski slope.
-
-        Parameters:
-            side (str): ``'left'`` or ``'right'`` — determines the horizontal
-                region in which the tree is placed.
-
-        Returns:
-            None
-        """
         self.side = side
         self.reset(spawning=False)
 
     def reset(self, spawning=True):
-        """Randomise this tree's size, position, and scroll speed.
-
-        Parameters:
-            spawning (bool): When True the tree is placed just above the top
-                edge; when False it is placed at a random vertical position
-                on screen (used for initial population).
-
-        Returns:
-            None
-        """
         self.size = random.randint(25, 55)
         if self.side == 'left':
             self.x = random.randint(20, 140)
@@ -662,15 +388,6 @@ class SideTree:
         self.speed = random.uniform(1.5, 3.0)
 
     def update(self, base_speed):
-        """Move the tree downward for one frame and reset it when off screen.
-
-        Parameters:
-            base_speed (float): Current game speed; the tree scrolls at
-                ``base_speed * self.speed``.
-
-        Returns:
-            None
-        """
         self.y += base_speed * self.speed
         if self.y > SCREEN_HEIGHT + 80:
             self.reset(spawning=True)
@@ -686,18 +403,6 @@ class SkiGame:
     SPAWN_INTERVAL_MIN = 45
 
     def __init__(self):
-        """Set up the tkinter window, canvas, key bindings, and start the game loop.
-
-        Creates the main window, initialises the background scenery and
-        snowflakes, sets the game state to the menu screen, and enters the
-        tkinter event loop.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         self.root = tk.Tk()
         self.root.title("Ski Mountain Game")
         self.root.resizable(False, False)
@@ -718,32 +423,10 @@ class SkiGame:
         self.root.mainloop()
 
     def _quit(self):
-        """Destroy the window and exit the process cleanly.
-
-        Bound to the window close (X) button via ``WM_DELETE_WINDOW``.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         self.root.destroy()
         sys.exit()
 
     def _key_press(self, event):
-        """Handle a key-press event: update held-key set and trigger state changes.
-
-        Records the pressed key in ``self.keys`` and handles one-shot actions:
-        starting the game from the menu, restarting after game-over, and
-        initiating a jump while playing.
-
-        Parameters:
-            event (tk.Event): The tkinter key-press event object.
-
-        Returns:
-            None
-        """
         self.keys.add(event.keysym.lower())
         # State transitions
         if self.state == STATE_MENU and event.keysym == "Return":
@@ -758,28 +441,9 @@ class SkiGame:
             self.jump_frame = 0
 
     def _key_release(self, event):
-        """Handle a key-release event: remove the key from the held-key set.
-
-        Parameters:
-            event (tk.Event): The tkinter key-release event object.
-
-        Returns:
-            None
-        """
         self.keys.discard(event.keysym.lower())
 
     def _init_background(self):
-        """Create the three parallax mountain layers, side trees, and snowflakes.
-
-        This is called once during ``__init__`` so that the background elements
-        are available before the first game loop iteration.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         self.bg_layers = [
             BackgroundLayer(MOUNTAIN_FAR,  4, (150, 320), 0.3),
             BackgroundLayer(MOUNTAIN_MID,  5, (220, 420), 0.6),
@@ -792,19 +456,7 @@ class SkiGame:
         self.snowflakes = [Snowflake(spawning=False) for _ in range(80)]
 
     def _new_game(self):
-        """Reset all per-game state for a fresh round.
-
-        Resets the skier position, angle, and jump state; clears obstacles;
-        and resets the score, speed, and spawn timer back to their starting
-        values.  Background elements (layers, trees, snowflakes) are not
-        reset so the scenery continues smoothly between games.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
+        # Skier state
         self.skier_x = SCREEN_WIDTH // 2
         self.skier_y = SCREEN_HEIGHT // 3  # start at the top of the vertical play area
         self.skier_angle = 0
@@ -823,26 +475,9 @@ class SkiGame:
         self.frame = 0
 
     def _loop(self):
-        """Schedule and execute one game-loop iteration.
-
-        Calls ``_update`` and ``_draw``, measures how long they took, then
-        uses ``root.after`` to schedule the next iteration so that the frame
-        rate targets ``FPS``.  A ``try/except`` guard ensures that a single
-        bad frame (e.g. a drawing error) prints the error and continues rather
-        than crashing the whole game.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         start = time.time()
-        try:
-            self._update()
-            self._draw()
-        except Exception as e:
-            print(f"[SkiGame] Frame error: {e}")
+        self._update()
+        self._draw()
         elapsed = int((time.time() - start) * 1000)
         delay = max(1, FRAME_DELAY - elapsed)
         self.root.after(delay, self._loop)
@@ -852,17 +487,6 @@ class SkiGame:
     # ------------------------------------------------------------------
 
     def _update(self):
-        """Dispatch per-frame logic to the appropriate state handler.
-
-        Delegates to ``_update_playing`` or ``_update_wipeout`` based on
-        ``self.state``.  While in the menu only snowflakes are animated.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         if self.state == STATE_PLAYING:
             self._update_playing()
         elif self.state == STATE_WIPEOUT:
@@ -872,19 +496,6 @@ class SkiGame:
                 flake.update()
 
     def _update_playing(self):
-        """Advance one frame of active gameplay.
-
-        Increments the frame counter and score, increases speed and adjusts
-        the obstacle spawn rate over time, processes keyboard input for skier
-        movement, updates the jump arc, scrolls background layers and side
-        trees, spawns and moves obstacles, and checks for collisions.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         self.frame += 1
         self.speed += self.SPEED_INCREASE
         self.spawn_interval = max(
@@ -948,18 +559,6 @@ class SkiGame:
                     break
 
     def _update_wipeout(self):
-        """Advance one frame of the wipeout animation.
-
-        Decrements the wipeout timer and spins the skier; scrolls background
-        elements at half speed to simulate the skier slowing down.  When the
-        timer reaches zero, transitions to the game-over state.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         self.wipeout_timer -= 1
         self.skier_angle += 12
 
@@ -978,17 +577,6 @@ class SkiGame:
     # ------------------------------------------------------------------
 
     def _draw(self):
-        """Clear the canvas and redraw every visible element for the current frame.
-
-        Dispatches to the appropriate combination of helper draw methods based
-        on ``self.state``.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         self.canvas.delete("all")
         if self.state == STATE_MENU:
             self._draw_background()
@@ -1006,17 +594,6 @@ class SkiGame:
             self._draw_gameover_overlay()
 
     def _draw_sky_gradient(self):
-        """Fill the canvas background with a smooth top-to-bottom sky gradient.
-
-        Draws one horizontal line per pixel row, interpolating linearly from
-        a deep navy blue at the top to an icy light blue at the horizon.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         # Draw sky as horizontal gradient lines — deep blue at top, icy light blue at bottom
         r1, g1, b1 = 0x1E, 0x50, 0x96  # Deep navy-blue at the very top
         r2, g2, b2 = 0xC8, 0xE8, 0xFF  # Icy light blue at the horizon
@@ -1029,18 +606,6 @@ class SkiGame:
                                     fill=hex_color(r, g, b), tags="bg")
 
     def _draw_background(self):
-        """Draw the complete background: sky gradient, mountains, sun, side trees, snow strip.
-
-        Calls ``_draw_sky_gradient``, draws all parallax mountain layers, adds
-        the sun with rays, renders the decorative side trees, and places the
-        snow ground strip at the bottom of the screen.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         self._draw_sky_gradient()
 
         # Mountain layers
@@ -1075,14 +640,6 @@ class SkiGame:
         )
 
     def _draw_snowflakes(self):
-        """Draw all snowflakes as small filled circles on the canvas.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         for flake in self.snowflakes:
             r = flake.size
             self.canvas.create_oval(
@@ -1091,34 +648,10 @@ class SkiGame:
             )
 
     def _draw_obstacles(self):
-        """Draw every active obstacle on the canvas.
-
-        Iterates over ``self.obstacles`` and calls each obstacle's ``draw``
-        method with the ``"obs"`` tag.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         for obs in self.obstacles:
             obs.draw(self.canvas, tag="obs")
 
     def _draw_skier(self):
-        """Draw the skier character, including jump arc and shadow when airborne.
-
-        During a jump the skier is raised by a sine-curve offset, scaled down
-        slightly to simulate perspective, and a shadow ellipse is drawn beneath
-        to reinforce the sense of height.  During a wipeout the skier rotates
-        via ``self.skier_angle``.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         angle = self.skier_angle if not self.skier_alive else 0
 
         if self.jump_active:
@@ -1152,16 +685,6 @@ class SkiGame:
         self.canvas.create_oval(x2 - 2*r, y2 - 2*r, x2, y2, fill=fill, outline="", tags=tag)
 
     def _draw_hud(self):
-        """Draw the heads-up display: score, best score, speed, and jump indicator.
-
-        All HUD elements use rounded-rectangle backgrounds for readability.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         score_text = f"Score: {int(self.score)}"
         # Score box (top-right)
         self._draw_rounded_rect(
@@ -1192,18 +715,6 @@ class SkiGame:
                                     font=("Arial", 13, "bold"), fill="#50FF50", tags="hud")
 
     def _draw_menu_overlay(self):
-        """Draw the main-menu overlay panel with title and control instructions.
-
-        Displays a semi-transparent dark panel in the centre of the screen
-        with the game title, a short description, control hints, and the
-        prompt to press ENTER to start.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         # Semi-transparent panel (simulate with a filled rectangle + stipple)
         self.canvas.create_rectangle(
             SCREEN_WIDTH // 2 - 280, SCREEN_HEIGHT // 2 - 200,
@@ -1230,17 +741,6 @@ class SkiGame:
                                 font=("Arial", 24, "bold"), fill=YELLOW, tags="overlay")
 
     def _draw_gameover_overlay(self):
-        """Draw the game-over overlay panel showing the player's score and best score.
-
-        Displays a semi-transparent red panel with a ``WIPEOUT!`` heading,
-        the final score, the all-time best score, and instructions to restart.
-
-        Parameters:
-            None
-
-        Returns:
-            None
-        """
         self.canvas.create_rectangle(
             SCREEN_WIDTH // 2 - 260, SCREEN_HEIGHT // 2 - 170,
             SCREEN_WIDTH // 2 + 260, SCREEN_HEIGHT // 2 + 130,
@@ -1264,8 +764,4 @@ class SkiGame:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    try:
-        SkiGame()
-    except Exception as e:
-        print(f"[SkiGame] Failed to start: {e}")
-        sys.exit(1)
+    SkiGame()
